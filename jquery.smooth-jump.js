@@ -1,12 +1,17 @@
 /*!
- * jQuery Smooth Jump 1.1.0
+ * jQuery Smooth Jump 1.1.4
  * Author: Mathieu Bouchard
  * Plugin Dependencies: jQuery Address 1.5+, Waypoints
  * Keywords: javascript,jquery,smooth,scroll,waypoint
  * License: MIT ( http://www.opensource.org/licenses/mit-license.php )
  * Repo: https://github.com/matb33/jquery-smooth-jump
  */
-(function ($) {
+
+ (function ($) {
+	var SMOOTH_JUMP_PREVENT_SCROLL;
+	var SMOOTH_JUMP_PREVENT_WAYPOINT_MONITORING;
+	var SMOOTH_JUMP_LAST_ADDRESS_VALUE;
+
 	$.fn.smoothJump = function (options) {
 		var settings = $.extend(true, {
 			prefix: "id-",
@@ -16,10 +21,10 @@
 			waypointOffset: function () { return 0; },
 			scrollAnimationDuration: 500,
 			scrollAnimationTimingFunction: "swing",
-			activeClass: "active"
+			activeClass: "active",
+			updateHashOnWaypoint: true,
+			dontSmoothJump: false
 		}, options);
-
-		var that = this;
 
 		var main = function () {
 			setupAnchors.call(this);
@@ -43,7 +48,7 @@
 					$item.click(function () {
 						// If we click on an anchor that has the same target again, ensure
 						// it actually does the scrolling action
-						if ($.fn.smoothJump.lastAddressValue === targetId) {
+						if (SMOOTH_JUMP_LAST_ADDRESS_VALUE === targetId) {
 							onAddressChange({value: targetId});
 						}
 					});
@@ -62,15 +67,15 @@
 					if (event.value !== "") {
 						// We have a hash on load, let's not monitor waypoints
 						// until we're done acting on it
-						$.fn.smoothJump.preventWaypointMonitoring = true;
+						SMOOTH_JUMP_PREVENT_WAYPOINT_MONITORING = true;
 					}
 
 					setupWaypoints.call(context);
 				});
 
 				$.address.change(function (event) {
-					if (event.value !== $.fn.smoothJump.lastAddressValue) {
-						$.fn.smoothJump.lastAddressValue = event.value;
+					if (event.value !== SMOOTH_JUMP_LAST_ADDRESS_VALUE) {
+						SMOOTH_JUMP_LAST_ADDRESS_VALUE = event.value;
 						onAddressChange(event);
 					}
 				});
@@ -83,7 +88,7 @@
 
 		var onAddressChange = function (event) {
 			var hash = event.value;
-			var scrollElement = "html, body";
+			var $scrollElement = $("html, body");
 			var target, $target;
 			var targetScrollTop;
 			var $activeLink;
@@ -94,15 +99,26 @@
 				$target = $("#" + target);
 
 				if ($target.length > 0) {
-					if (!$.fn.smoothJump.preventScroll) {
-						targetScrollTop = $target.offset().top - settings.topOffset();
+					if (!SMOOTH_JUMP_PREVENT_SCROLL) {
+						if (settings.dontSmoothJump) {
+							// Non-smooth behavior: do built-in scroll via hash,
+							// then after adjust top offset
+							$.address.value(target);
+							$scrollElement.scrollTop($scrollElement.scrollTop() - settings.topOffset());
+						} else {
+							// Normal behavior, smooth jump
+							targetScrollTop = $target.offset().top - settings.topOffset();
 
-						$(scrollElement).stop().animate({
-							"scrollTop": targetScrollTop
-						}, settings.scrollAnimationDuration, settings.scrollAnimationTimingFunction, function () {
-							$.fn.smoothJump.preventWaypointMonitoring = false;
-							$.waypoints("refresh");
-						});
+							$scrollElement.stop().animate({
+								"scrollTop": targetScrollTop
+							}, settings.scrollAnimationDuration, settings.scrollAnimationTimingFunction, function () {
+								SMOOTH_JUMP_PREVENT_WAYPOINT_MONITORING = false;
+								$.waypoints("refresh");
+								setTimeout(function () {
+									$(window).trigger("scroll");
+								}, 250);
+							});
+						}
 					}
 
 					$activeLink = $("a[href*='#" + hash + "']", $nav);
@@ -122,7 +138,7 @@
 
 			$sections.waypoint("destroy");
 			$sections.waypoint(function (event, direction) {
-				if (!$.fn.smoothJump.preventWaypointMonitoring) {
+				if (!SMOOTH_JUMP_PREVENT_WAYPOINT_MONITORING) {
 					var active = this;
 					var $active = $(active);
 					var activeID;
@@ -147,26 +163,24 @@
 
 					activeID = $active.attr("id");
 
-					// Update hash value in address bar
-					$.fn.smoothJump.preventScroll = true;
-					$.address.value(settings.prefix + activeID);
-					$.fn.smoothJump.preventScroll = false;
+					if (settings.updateHashOnWaypoint) {
+						// Update hash value in address bar
+						SMOOTH_JUMP_PREVENT_SCROLL = true;
+						$.address.value(settings.prefix + activeID);
+						SMOOTH_JUMP_PREVENT_SCROLL = false;
+					}
 				}
 			}, {
 				offset: settings.waypointOffset()
 			});
 		};
 
+		SMOOTH_JUMP_PREVENT_SCROLL = false;
+		SMOOTH_JUMP_PREVENT_WAYPOINT_MONITORING = false;
+
 		this.each(main);
 
-		return {
-			get: function () {
-				return that;
-			},
-			preventScroll: false,
-			preventWaypointMonitoring: false,
-			lastAddressValue: null
-		};
+		return this;
 	};
 
 })(window.jQuery);
