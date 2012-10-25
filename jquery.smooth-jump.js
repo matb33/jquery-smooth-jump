@@ -1,5 +1,5 @@
 /*!
- * jQuery Smooth Jump 1.1.4
+ * jQuery Smooth Jump 1.2.0
  * Author: Mathieu Bouchard
  * Plugin Dependencies: jQuery Address 1.5+, Waypoints
  * Keywords: javascript,jquery,smooth,scroll,waypoint
@@ -22,7 +22,7 @@
 			scrollAnimationDuration: 500,
 			scrollAnimationTimingFunction: "swing",
 			activeClass: "active",
-			updateHashOnWaypoint: true,
+			updateHashOnWaypoint: false,
 			dontSmoothJump: false
 		}, options);
 
@@ -49,7 +49,7 @@
 						// If we click on an anchor that has the same target again, ensure
 						// it actually does the scrolling action
 						if (SMOOTH_JUMP_LAST_ADDRESS_VALUE === targetId) {
-							onAddressChange({value: targetId});
+							onAddressChange.call(this, {value: targetId});
 						}
 					});
 				}
@@ -62,6 +62,7 @@
 
 			if ($this.data("smooth_jump_address_events_already_bound") !== true) {
 				$.address.strict(false);
+				$.address.history(true);
 
 				$.address.init(function (event) {
 					if (event.value !== "") {
@@ -76,13 +77,14 @@
 				$.address.change(function (event) {
 					if (event.value !== SMOOTH_JUMP_LAST_ADDRESS_VALUE) {
 						SMOOTH_JUMP_LAST_ADDRESS_VALUE = event.value;
-						onAddressChange(event);
+						onAddressChange.call(this, event);
 					}
 				});
 
 				$this.data("smooth_jump_address_events_already_bound", true);
 			} else {
 				setupWaypoints.call(context);
+				// onAddressChange.call(context, {value: window.location.hash.replace("#", "")});
 			}
 		};
 
@@ -128,13 +130,14 @@
 						$activeLink.parent().addClass(settings.activeClass);
 					}
 				} else {
-					throw "Invalid target #" + target + " in onAddressChange";
+					// throw "Invalid target #" + target + " in onAddressChange";
 				}
 			}
 		};
 
 		var setupWaypoints = function () {
 			var $sections = settings.$sections();
+			var $nav = settings.$nav();
 
 			$sections.waypoint("destroy");
 			$sections.waypoint(function (event, direction) {
@@ -163,11 +166,17 @@
 
 					activeID = $active.attr("id");
 
-					if (settings.updateHashOnWaypoint) {
+					if (settings.updateHashOnWaypoint && activeID) {
 						// Update hash value in address bar
 						SMOOTH_JUMP_PREVENT_SCROLL = true;
 						$.address.value(settings.prefix + activeID);
 						SMOOTH_JUMP_PREVENT_SCROLL = false;
+					} else {
+						$activeLink = $("a[href*='#" + settings.prefix + activeID + "']", $nav);
+						if ($activeLink.length > 0) {
+							$("." + settings.activeClass, $nav).removeClass(settings.activeClass);
+							$activeLink.parent().addClass(settings.activeClass);
+						}
 					}
 				}
 			}, {
